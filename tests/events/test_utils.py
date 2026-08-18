@@ -617,6 +617,92 @@ class PruneEventTestCase(stdlib_unittest.TestCase):
             room_version=RoomVersions.MSC3389v10,
         )
 
+    def test_relations_msc4530(self) -> None:
+        """MSC4530 preserves the fallback & context keys of thread relations on redaction."""
+        # Thread relations keep the fallback & context keys.
+        self.run_test(
+            {
+                "type": "m.room.message",
+                "content": {
+                    "body": "foo",
+                    "m.relates_to": {
+                        "rel_type": "m.thread",
+                        "event_id": "$parent:domain",
+                        "is_falling_back": True,
+                        "m.in_reply_to": {"event_id": "$in_reply_to:domain"},
+                        "other": "stripped",
+                    },
+                },
+            },
+            {
+                "type": "m.room.message",
+                "content": {
+                    "m.relates_to": {
+                        "rel_type": "m.thread",
+                        "event_id": "$parent:domain",
+                        "is_falling_back": True,
+                        "m.in_reply_to": {"event_id": "$in_reply_to:domain"},
+                    },
+                },
+                "signatures": {},
+                "unsigned": {},
+            },
+            room_version=RoomVersions.MSC4530v12,
+        )
+
+        # Non-thread relations only keep `rel_type` and `event_id` (as per MSC3389).
+        self.run_test(
+            {
+                "type": "m.room.message",
+                "content": {
+                    "body": "foo",
+                    "m.relates_to": {
+                        "rel_type": "m.replace",
+                        "event_id": "$parent:domain",
+                        "is_falling_back": True,
+                        "m.in_reply_to": {"event_id": "$in_reply_to:domain"},
+                        "other": "stripped",
+                    },
+                },
+            },
+            {
+                "type": "m.room.message",
+                "content": {
+                    "m.relates_to": {
+                        "rel_type": "m.replace",
+                        "event_id": "$parent:domain",
+                    },
+                },
+                "signatures": {},
+                "unsigned": {},
+            },
+            room_version=RoomVersions.MSC4530v12,
+        )
+
+        # Room version 12 (which does not implement MSC4530) strips all relation
+        # information.
+        self.run_test(
+            {
+                "type": "m.room.message",
+                "content": {
+                    "body": "foo",
+                    "m.relates_to": {
+                        "rel_type": "m.thread",
+                        "event_id": "$parent:domain",
+                        "is_falling_back": True,
+                        "m.in_reply_to": {"event_id": "$in_reply_to:domain"},
+                    },
+                },
+            },
+            {
+                "type": "m.room.message",
+                "content": {},
+                "signatures": {},
+                "unsigned": {},
+            },
+            room_version=RoomVersions.V12,
+        )
+
 
 class CloneEventTestCase(stdlib_unittest.TestCase):
     def test_unsigned_is_copied(self) -> None:

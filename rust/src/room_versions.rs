@@ -132,6 +132,8 @@ pub struct RoomVersion {
     pub knock_join_rule: bool,
     /// MSC3389: Protect relation information from redaction.
     pub msc3389_relation_redactions: bool,
+    /// MSC4530: Protect relation fallback information from redaction.
+    pub msc4530_redaction_relationship_change: bool,
     /// Support the 'knock_restricted' join rule.
     pub knock_restricted_join_rule: bool,
     /// Enforce integer power levels.
@@ -179,6 +181,7 @@ impl RoomVersion {
         restricted_join_rule_fix: false,
         knock_join_rule: false,
         msc3389_relation_redactions: false,
+        msc4530_redaction_relationship_change: false,
         knock_restricted_join_rule: false,
         enforce_int_power_levels: false,
         msc3931_push_features: &[],
@@ -314,6 +317,15 @@ impl RoomVersion {
         msc4242_state_dags: true,
         ..Self::V12
     };
+
+    /// MSC4530 (Do not redact relationships) based on room version "12".
+    pub const MSC4530V12: RoomVersion = RoomVersion {
+        identifier: "org.matrix.msc4530.12",
+        disposition: RoomDisposition::UNSTABLE,
+        msc3389_relation_redactions: true,
+        msc4530_redaction_relationship_change: true,
+        ..Self::V12
+    };
 }
 
 impl Display for RoomVersion {
@@ -345,6 +357,7 @@ impl FromStr for &'static RoomVersion {
             "org.matrix.msc3757.11" => Ok(&RoomVersion::MSC3757V11),
             "org.matrix.hydra.11" => Ok(&RoomVersion::HYDRA_V11),
             "org.matrix.msc4242.12" => Ok(&RoomVersion::MSC4242V12),
+            "org.matrix.msc4530.12" => Ok(&RoomVersion::MSC4530V12),
             _ => Err(anyhow::anyhow!("Unknown room version: {}", s)),
         }
     }
@@ -608,6 +621,10 @@ impl RoomVersions {
     #[classattr]
     fn MSC4242v12(py: Python<'_>) -> PyResult<Py<PyAny>> {
         RoomVersion::MSC4242V12.into_py_any(py)
+    }
+    #[classattr]
+    fn MSC4530v12(py: Python<'_>) -> PyResult<Py<PyAny>> {
+        RoomVersion::MSC4530V12.into_py_any(py)
     }
 }
 

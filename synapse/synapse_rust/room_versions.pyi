@@ -94,6 +94,8 @@ class RoomVersion:
     """Support the 'knock' join rule."""
     msc3389_relation_redactions: bool
     """MSC3389: Protect relation information from redaction."""
+    msc4530_redaction_relationship_change: bool
+    """MSC4530: Protect relation fallback information from redaction."""
     knock_restricted_join_rule: bool
     """Support the 'knock_restricted' join rule."""
     enforce_int_power_levels: bool
@@ -143,6 +145,7 @@ class RoomVersions:
     HydraV11: RoomVersion
     V12: RoomVersion
     MSC4242v12: RoomVersion
+    MSC4530v12: RoomVersion
 
 class KnownRoomVersionsMapping(Mapping[str, RoomVersion]):
     def add_room_version(self, room_version: RoomVersion) -> None: ...

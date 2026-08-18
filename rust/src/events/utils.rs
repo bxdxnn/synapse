@@ -12,16 +12,16 @@ use sha2::{Digest, Sha256};
 use super::constants::{
     aliases_field, create_field,
     event_field::{
-        AUTH_EVENTS, CONTENT, DEPTH, EVENT_ID, HASHES, MEMBERSHIP, ORIGIN, ORIGIN_SERVER_TS,
-        PREV_EVENTS, PREV_STATE, REPLACES_STATE, ROOM_ID, SENDER, SIGNATURES, STATE_KEY, TYPE,
-        UNSIGNED,
+        AUTH_EVENTS, CONTENT, DEPTH, EVENT_ID, HASHES, IS_FALLING_BACK, MEMBERSHIP, M_IN_REPLY_TO,
+        ORIGIN, ORIGIN_SERVER_TS, PREV_EVENTS, PREV_STATE, REPLACES_STATE, ROOM_ID, SENDER,
+        SIGNATURES, STATE_KEY, TYPE, UNSIGNED,
     },
     event_type::{
         M_ROOM_ALIASES, M_ROOM_CREATE, M_ROOM_HISTORY_VISIBILITY, M_ROOM_JOIN_RULES, M_ROOM_MEMBER,
         M_ROOM_POWER_LEVELS, M_ROOM_REDACTION,
     },
     history_visibility_field, join_rules_field, membership_field, power_levels_field,
-    redaction_field,
+    redaction_field, relation_type,
     unsigned_field::AGE_TS,
 };
 use crate::{
@@ -241,7 +241,9 @@ pub fn redact(event: &Value, room_version: &RoomVersion) -> anyhow::Result<Value
         }
     }
 
-    if room_version.msc3389_relation_redactions {
+    if room_version.msc3389_relation_redactions
+        || room_version.msc4530_redaction_relationship_change
+    {
         if let Some(relates_to) = event
             .get(CONTENT)
             .and_then(|content| content.get(M_RELATES_TO))
@@ -255,6 +257,20 @@ pub fn redact(event: &Value, room_version: &RoomVersion) -> anyhow::Result<Value
                 for field in ["rel_type", "event_id"] {
                     if let Some(value) = relates_to.get(field) {
                         new_relates_to_mut.insert(field.to_string(), value.clone());
+                    }
+                }
+
+                // MSC4530: preserve the fallback and context keys for thread
+                // relations, so that redacted events can still be categorised
+                // and rendered as part of their thread.
+                if room_version.msc4530_redaction_relationship_change
+                    && relates_to.get("rel_type").and_then(|v| v.as_str())
+                        == Some(relation_type::THREAD)
+                {
+                    for field in [M_IN_REPLY_TO, IS_FALLING_BACK] {
+                        if let Some(value) = relates_to.get(field) {
+                            new_relates_to_mut.insert(field.to_string(), value.clone());
+                        }
                     }
                 }
 
@@ -1189,5 +1205,125 @@ mod tests {
                 "Room Version {version}"
             );
         }
+    }
+
+    #[test]
+    /// Tests that `m.relates_to` is preserved under MSC4530 redaction rules
+    /// (both from MSC3389 and the additional thread fallback keys).
+    fn test_redact_m_room_message_m_relates_to_msc4530() {
+        let original = json!(
+            {
+                "type":"m.room.message",
+                "content":{
+                    "body":"foo",
+                    "m.relates_to":{
+                        "rel_type":"m.thread",
+                        "event_id":"$parent:domain",
+                        "is_falling_back":true,
+                        "m.in_reply_to":{
+                            "event_id":"$in_reply_to:domain",
+                        },
+                        "other":"stripped",
+                    },
+                },
+            }
+        );
+
+        let expected_thread = json!(
+            {
+                "type":"m.room.message",
+                "content":{
+                    "m.relates_to":{
+                        "rel_type":"m.thread",
+                        "event_id":"$parent:domain",
+                        "is_falling_back":true,
+                        "m.in_reply_to":{
+                            "event_id":"$in_reply_to:domain",
+                        },
+                    },
+                },
+            }
+        );
+
+        let redacted = redact(&original, &RoomVersion::MSC4530V12).unwrap();
+        assert_eq!(expected_thread, redacted);
+
+        let original_replace = json!(
+            {
+                "type":"m.room.message",
+                "content":{
+                    "body":"foo",
+                    "m.relates_to":{
+                        "rel_type":"m.replace",
+                        "event_id":"$parent:domain",
+                        "is_falling_back":true,
+                        "m.in_reply_to":{
+                            "event_id":"$in_reply_to:domain",
+                        },
+                        "other":"stripped",
+                    },
+                },
+            }
+        );
+
+        let expected_replace = json!(
+            {
+                "type":"m.room.message",
+                "content":{
+                    "m.relates_to":{
+                        "rel_type":"m.replace",
+                        "event_id":"$parent:domain",
+                    },
+                },
+            }
+        );
+
+        let redacted = redact(&original_replace, &RoomVersion::MSC4530V12).unwrap();
+        assert_eq!(expected_replace, redacted);
+
+        // Room version 12 (which does not implement MSC4530) strips all
+        // relation information.
+        let expected_v12 = json!(
+            {
+                "type":"m.room.message",
+                "content":{},
+            }
+        );
+
+        let redacted = redact(&original, &RoomVersion::V12).unwrap();
+        assert_eq!(expected_v12, redacted);
+
+        // If the `rel_type` is not a string the fallback keys are not
+        // preserved.
+        let original_bad_rel_type = json!(
+            {
+                "type":"m.room.message",
+                "content":{
+                    "body":"foo",
+                    "m.relates_to":{
+                        "rel_type":{},
+                        "event_id":"$parent:domain",
+                        "m.in_reply_to":{
+                            "event_id":"$in_reply_to:domain",
+                        },
+                    },
+                },
+            }
+        );
+
+        let expected_bad_rel_type = json!(
+            {
+                "type":"m.room.message",
+                "content":{
+                    "m.relates_to":{
+                        "rel_type":{},
+                        "event_id":"$parent:domain",
+                    },
+                },
+            }
+        );
+
+        let redacted = redact(&original_bad_rel_type, &RoomVersion::MSC4530V12).unwrap();
+        assert_eq!(expected_bad_rel_type, redacted);
     }
 }

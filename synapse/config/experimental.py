@@ -171,6 +171,12 @@ class ExperimentalConfig(Config):
             # Enable the room version
             KNOWN_ROOM_VERSIONS.add_room_version(RoomVersions.MSC4242v12)
 
+        # MSC4530: Do not redact relationships
+        self.msc4530_enabled: bool = experimental.get("msc4530_enabled", False)
+        if self.msc4530_enabled:
+            # Enable the room version
+            KNOWN_ROOM_VERSIONS.add_room_version(RoomVersions.MSC4530v12)
+
         # MSC3391: Removing account data.
         self.msc3391_enabled = experimental.get("msc3391_enabled", False)
 

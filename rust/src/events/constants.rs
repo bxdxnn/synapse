@@ -65,6 +65,10 @@ pub mod event_field {
     pub const PREV_STATE_EVENTS: &str = "prev_state_events";
     // Event field: m.relates_to
     pub const M_RELATES_TO: &str = "m.relates_to";
+    // Event field: m.in_reply_to
+    pub const M_IN_REPLY_TO: &str = "m.in_reply_to";
+    // Event field: is_falling_back
+    pub const IS_FALLING_BACK: &str = "is_falling_back";
 }
 
 pub mod unsigned_field {
